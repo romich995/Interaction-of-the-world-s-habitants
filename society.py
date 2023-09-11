@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import pandas as pd
+from copy import deepcopy, copy
 
 from functools import reduce
 
@@ -14,7 +15,7 @@ from tqdm import tqdm
 torch.set_default_device('cpu')
 
 n_features = 4 
-feature_inflation = np.array([0.001 for _ in range(n_features)])
+feature_inflation = np.array([0.00001 for _ in range(n_features)])
 earth_rewards = np.array([.01, .01, -0.02, 0])
 feature_mean = 1
 feature_std = .2
@@ -26,7 +27,8 @@ risk_proj_size = 1
 n_person = 100
 earth_features = [1000, 1000, 1000, 0]
 probably_random_count = .01
-n_iterate = 30
+n_iterate = 100
+increase_threshold = 0
 
 def t_2_np(tensor):
 	res = []
@@ -47,20 +49,41 @@ class Rewards:
 	def __init__(self, person):
 		self.person = person
 		self.input_size = 2 * n_features
-		self.model = nn.LSTM(self.input_size, hidden_size)
+		self.model = nn.LSTM(self.input_size + 1, hidden_size)
 
 
 	def __call__(self, other):
+		self_risk = self.person.self_risk()
 		r = np.concatenate((
 						self.person.features, 
 						other.features), axis = 0).\
 			reshape((1, self.input_size))
-		o, (reward, _ )  = self.model(torch.from_numpy(r).float())
+		r = torch.from_numpy(r).float()
+		#print(self_risk.reshape((1)), r.reshape((self.input_size)))
+		r = torch.cat((self_risk.reshape((1)), r.reshape((self.input_size)))).contiguous()
+		o, (reward, _ )  = self.model(r.reshape((1,self.input_size + 1)))
 		#print(o,reward)
 		reward = torch.atanh(o)
 		#print(reward)
 
 		return reward
+
+
+class SelfRisk:
+	def __init__(self, person):
+		self.person = person
+		self.input_size = n_features
+		self.model = nn.LSTM(self.input_size, hidden_size, proj_size=1)
+
+	def __call__(self, features=None):
+		if features is None:
+			features = self.person.features
+		#print(features)
+
+		self_risk, _ = self.model(torch.from_numpy(features).float().reshape((1,self.input_size)))
+		#print(self_risk)
+		return self_risk
+
 
 class Risk:
 	def __init__(self, person, reward):
@@ -76,14 +99,17 @@ class Risk:
                 {'params': self.model_2.parameters()},
                 {'params': self.model_1.parameters()},
                 {'params': self.reward.model.parameters()},
+                {'params': self.person.self_risk.model.parameters()},
             ], lr=1e-2, momentum=0.9)
 		self.optimizer.zero_grad()
+	
 	def __call__(self, damages, rewards, other_features):
 		#print(damages, damages.shape, type(damages), len(damages))
 		#print(tensor_to_numpy_array(damages))
 		#print(damages, damages.shape, type(damages), len(damages))
 		#print(other_features, self.person.features)
 		#print(tensor_to_numpy_array(damages))
+		#print(self.person.features, other_features, damages)
 		first_input = np.concatenate((self.person.features,
 						other_features,
 						damages[0].detach().numpy()
@@ -114,6 +140,7 @@ class Person:
 		self.features[2] = max(self.features[2],0) # comfort feature
 		# finance feature may be negative in the current world 
 		self.comission_rate = np.random.uniform(commission_rate_min,commission_rate_max)
+		self.self_risk = SelfRisk(self)
 		self.reward_model = Rewards(self)
 		self.risk_model = Risk(self, self.reward_model)
 
@@ -124,9 +151,6 @@ class Person:
 	def rewards_to(self, other):
 		return self.reward_model(other)
 
-	def self_risk(self, damages, rewards, other_features):
-		risk = self.risk_model(damages, rewards, other_features)
-		return risk
 
 	def invite(self, other, society=None):
 		if not society:
@@ -266,9 +290,39 @@ class Register:
 		pd.DataFrame(self.number_interact).to_csv(f'number_interactions.csv')
 
 
+	def increase_population(self):
+		new_person_societies = []
+		for person_sct_1 in self.personSocieties:
+			if person_sct_1.person is not self.Earth and person_sct_1.person.features[0] > 0:
+				person = person_sct_1.person
+				self_risk = person.self_risk()
+				if np.random.binomial(1, 1 - (self_risk.item() + 1) / 2):
+					new_person = deepcopy(person)
+					person.features /= 2
+					new_person.features /= 2
+					new_person_society = PersonSociety(person)
+					new_person_society.societies = copy(person_sct_1.societies)
+					new_person_society.add_society(person_sct_1)
+					person_sct_1.add_society(new_person_society)
+
+					new_person_societies.append(new_person_society)
+
+
+		self.personSocieties.extend(new_person_societies)
+		self.persons.extend([person_sct.person for person_sct in new_person_societies])
+		print(len(new_person_societies))
+
+
+
 
 	def personInteractions(self):
 		self.interActionCounter = InterActionCounter()
+
+		#increase_population
+		self.increase_population()
+
+		print(len(self.personSocieties))
+
 		for person_sct_1 in self.personSocieties:
 			for person_sct_2 in person_sct_1.roots_loc_sct:
 				InterAction(person_sct_1.person, person_sct_2.person, self.interActionCounter)()
@@ -326,7 +380,7 @@ class InterAction:
 
 			#self.sct_1.interact(self.sct_2, sct_1_risk, rewards_sct_1_to_sct_2, sct_2_risk, rewards_sct_2_to_sct_1)
 
-			if sct_1_risk <= risk_treshold and sct_2_risk <= risk_treshold:
+			if np.random.binomial(1, 1 - (sct_1_risk.item() + 1) / 2)  and np.random.binomial(1, 1 - (sct_2_risk.item()  + 1)/2):
 				
 				self.sct_1.interact(rewards_sct_2_to_sct_1, rewards_sct_1_to_sct_2, self.sct_2)
 				self.sct_2.interact(rewards_sct_1_to_sct_2, rewards_sct_2_to_sct_1, self.sct_1)

@@ -2,9 +2,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 import pandas as pd
 
 from functools import reduce
+
+from tqdm import tqdm
 
 
 
@@ -12,6 +15,7 @@ torch.set_default_device('cpu')
 
 n_features = 4 
 feature_inflation = np.array([0.001 for _ in range(n_features)])
+earth_rewards = np.array([.01, .01, -0.02, 0])
 feature_mean = 1
 feature_std = .2
 commission_rate_min = 0
@@ -19,11 +23,24 @@ commission_rate_max = 1
 risk_treshold = .0
 hidden_size = n_features
 risk_proj_size = 1
-n_person = 10
-earth_features = [0, 1000, 1000, 0]
+n_person = 100
+earth_features = [1000, 1000, 1000, 0]
 probably_random_count = .01
-n_iterate = 10
+n_iterate = 30
 
+def t_2_np(tensor):
+	res = []
+	if len(tensor.shape) > 0:
+		for i in range(tensor.shape[0]):
+			res.append(t_2_np(tensor[i]))
+	else:
+		return tensor.item()
+
+	return np.array(res)
+
+def tensor_to_numpy_array(tensor):
+	return t_2_np(tensor)
+	
 
 
 class Rewards:
@@ -34,29 +51,43 @@ class Rewards:
 
 
 	def __call__(self, other):
-
-		r = np.union1d(
+		r = np.concatenate((
 						self.person.features, 
-						other.features).\
+						other.features), axis = 0).\
 			reshape((1, self.input_size))
-		_, (reward, _ )  = self.model(torch.from_numpy(r).float())
+		o, (reward, _ )  = self.model(torch.from_numpy(r).float())
+		#print(o,reward)
+		reward = torch.atanh(o)
+		#print(reward)
 
 		return reward
 
 class Risk:
-	def __init__(self, person):
+	def __init__(self, person, reward):
 		self.person = person
 		self.n_features = n_features
 		self.input_size = 3 * n_features
+		self.reward = reward
 		self.model_1 = nn.LSTM(self.input_size, hidden_size + 1, proj_size=n_features)
 		self.model_2 = nn.LSTM(n_features, hidden_size + 1, proj_size=n_features)
 		self.model_3 = nn.LSTM(2 * n_features, hidden_size, proj_size=risk_proj_size)
-
+		self.optimizer = optim.SGD([
+                {'params': self.model_3.parameters()},
+                {'params': self.model_2.parameters()},
+                {'params': self.model_1.parameters()},
+                {'params': self.reward.model.parameters()},
+            ], lr=1e-2, momentum=0.9)
+		self.optimizer.zero_grad()
 	def __call__(self, damages, rewards, other_features):
-		first_input = reduce(np.union1d, [self.person.features,
+		#print(damages, damages.shape, type(damages), len(damages))
+		#print(tensor_to_numpy_array(damages))
+		#print(damages, damages.shape, type(damages), len(damages))
+		#print(other_features, self.person.features)
+		#print(tensor_to_numpy_array(damages))
+		first_input = np.concatenate((self.person.features,
 						other_features,
-						damages.detach().numpy()
-						]).\
+						damages[0].detach().numpy()
+						), axis = 0).\
 			reshape((1, self.input_size))
 		first_input = torch.from_numpy(first_input).float()
 		second_input = rewards
@@ -67,7 +98,10 @@ class Risk:
 
 		return risk		
 
-
+	def backward(self, risk, value):
+		risk.backward(value)
+		self.optimizer.step()
+		self.optimizer.zero_grad()
 
 #	def estimate
 
@@ -81,7 +115,8 @@ class Person:
 		# finance feature may be negative in the current world 
 		self.comission_rate = np.random.uniform(commission_rate_min,commission_rate_max)
 		self.reward_model = Rewards(self)
-		self.risk_model = Risk(self)
+		self.risk_model = Risk(self, self.reward_model)
+
 
 	def __hash__(self):
 		return id(self)
@@ -109,7 +144,19 @@ class Person:
 	def inflation_features(self):
 		self.features *= (1 - feature_inflation) 
 
+	def interact(self, damages, rewards, other):
+		self.update_features(damages, rewards)
+		for index, feature in enumerate(self.features[:-1]):
+			if feature < 0:
+				self.features[index] = 0
+				other.features[index] -= feature
 
+		if self.features[0] == 0:
+			self.distribute_features(other)
+
+	def distribute_features(self, other):
+		other.features += self.features
+		self.features -=  self.features
 
 #	def exit(self, society)
 
@@ -156,15 +203,64 @@ class PersonSociety:
 #	def estimated_rewards_to(self, other)
 		
 
+
+class PlanetReward:
+	def __init__(self):
+		pass
+
+	def __call__(self, other):
+
+		return torch.from_numpy((other.features * earth_rewards).reshape((1, n_features))).float()
+
+
+class PlanetRisk:
+	def __init__(self, person=None):
+		self.person = person
+
+	def __call__(self, damages=None, rewards=None, other_features=None):
+		return torch.from_numpy(np.array([[0]]))
+
+	def backward(self, risk, value):
+		pass
+
+
+class Planet:
+	def __init__(self):
+		self.features = earth_features
+		self.comission_rate = 0
+		self.reward_model = PlanetReward()
+		self.risk_model = PlanetRisk()
+
+	def update_features(self, damages, rewards):	
+		self.features -= rewards[0].detach().numpy()
+		self.features += damages[0].detach().numpy()		
+
+	def interact(self, damages, rewards, other):
+		self.update_features(damages, rewards)
+		for index, feature in enumerate(self.features[:-1]):
+			if feature < 0:
+				self.features[index] = 0
+				other.features[index] -= feature
+
+		if self.features[0] == 0:
+			self.distribute_features(other)
+
+	def distribute_features(self, other):
+		other.features += self.features
+		self.features -=  self.features
+
 class Register:
 	def __init__(self):
 		self.number_interact = []
 		self.persons = [Person() for _ in range(n_person)]
-		#self.Earth = 
 		self.personSocieties = [PersonSociety(person) for person in self.persons]
+		
+		self.Earth = Planet()
+		self.persons.append(self.Earth)
+		self.personSocieties.append(PersonSociety(self.Earth))
 
 	def __call__(self):
-		for _ in range(n_iterate):
+		for _ in tqdm(range(n_iterate)):
 			self.personInteractions()
 
 		pd.DataFrame(self.number_interact).to_csv(f'number_interactions.csv')
@@ -195,15 +291,9 @@ class Register:
 		self.number_interact.append(self.interActionCounter.counter)
 	
 	def stat(self):
-		pd.DataFrame([[person.features for person in self.persons]]).to_csv(f'{len(self.number_interact)}.csv')
+		pd.DataFrame([person.features for person in self.persons]).to_csv(f'{len(self.number_interact)}.csv')
 
 
-class Planet:
-	def __init__(self, societies):
-		self.features = earth_features
-		self.comission_rate = 0
-		self.reward_model = DumpModel()
-		self.risk_model = DumpModel()
 
 
 
@@ -219,33 +309,35 @@ class InterAction:
 		self.interActionCounter = interActionCounter
 
 	def __call__(self):
+		if hasattr(self.sct_1,'inflation_features'):
+			self.sct_1.inflation_features()
+		if hasattr(self.sct_2, 'inflation_features'):
+			self.sct_2.inflation_features()
+
 		if self.sct_1.features[0] > 0 and self.sct_2.features[0] > 0 and self.sct_1 != self.sct_2:
 			rewards_sct_1_to_sct_2 = self.sct_1.reward_model(self.sct_2)
 			rewards_sct_2_to_sct_1 = self.sct_2.reward_model(self.sct_1)
 
-			sct_1_risk = self.sct_1.risk_model(rewards_sct_1_to_sct_2, rewards_sct_2_to_sct_1, self.sct_2.features)
-			sct_2_risk = self.sct_2.risk_model(rewards_sct_2_to_sct_1, rewards_sct_1_to_sct_2, self.sct_1.features)
-			if sct_1_risk < risk_treshold and sct_2_risk < risk_treshold:
-				self.sct_1.update_features(rewards_sct_2_to_sct_1, rewards_sct_1_to_sct_2)
-				self.sct_2.update_features(rewards_sct_1_to_sct_2, rewards_sct_2_to_sct_1)
-				for index, feature in enumerate(self.sct_1.features[:-1]):
-					if feature < 0:
-						self.sct_1.features[index] = 0
-						self.sct_2.features[index] -= feature
+			sct_1_risk = self.sct_1.risk_model(rewards_sct_2_to_sct_1, rewards_sct_1_to_sct_2, self.sct_2.features)
+			sct_2_risk = self.sct_2.risk_model(rewards_sct_1_to_sct_2, rewards_sct_2_to_sct_1, self.sct_1.features)
+			
+			#if not hasattr(self.sct_1,'inflation_features') or not hasattr(self.sct_2, 'inflation_features'):
+			#	print(sct_2_risk, sct_1_risk, rewards_sct_1_to_sct_2, rewards_sct_2_to_sct_1)
+
+			#self.sct_1.interact(self.sct_2, sct_1_risk, rewards_sct_1_to_sct_2, sct_2_risk, rewards_sct_2_to_sct_1)
+
+			if sct_1_risk <= risk_treshold and sct_2_risk <= risk_treshold:
 				
-				for index, feature in enumerate(self.sct_2.features[:-1]):
-					if feature < 0:
-						self.sct_2.features[index] = 0
-						self.sct_1.features[index] -= feature
+				self.sct_1.interact(rewards_sct_2_to_sct_1, rewards_sct_1_to_sct_2, self.sct_2)
+				self.sct_2.interact(rewards_sct_1_to_sct_2, rewards_sct_2_to_sct_1, self.sct_1)
 				
 				if self.interActionCounter:
 					self.interActionCounter.counter += 1
 
-			self.sct_1.inflation_features()
-			self.sct_2.inflation_features()
+			
 
-			sct_1_risk.backward(torch.tensor([[sct_1_risk >= risk_treshold * 2 - 1]]))
-			sct_2_risk.backward(torch.tensor([[sct_2_risk >= risk_treshold * 2 - 1]]))
+			self.sct_1.risk_model.backward(sct_1_risk, torch.tensor([[(sct_1_risk > risk_treshold) * 2 - 1]]))
+			self.sct_2.risk_model.backward(sct_2_risk, torch.tensor([[(sct_2_risk > risk_treshold) * 2 - 1]]))
 
 
 

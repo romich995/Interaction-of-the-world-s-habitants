@@ -27,8 +27,9 @@ risk_proj_size = 1
 n_person = 100
 earth_features = [1000, 1000, 1000, 0]
 probably_random_count = .01
-n_iterate = 100
+n_iterate = 300
 increase_threshold = 0
+max_probability_divide = 0.01
 
 def t_2_np(tensor):
 	res = []
@@ -296,7 +297,7 @@ class Register:
 			if person_sct_1.person is not self.Earth and person_sct_1.person.features[0] > 0:
 				person = person_sct_1.person
 				self_risk = person.self_risk()
-				if np.random.binomial(1, 1 - (self_risk.item() + 1) / 2):
+				if np.random.binomial(1, (1 - (self_risk.item() + 1) / 2) * max_probability_divide):
 					new_person = deepcopy(person)
 					person.features /= 2
 					new_person.features /= 2

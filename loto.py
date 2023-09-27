@@ -425,8 +425,9 @@ class RegisterDecisions:
 
 	def __call__(self):		
 		for iterate_node in self.iterate_nodes:
-			iterate_node.interact(RandomService.random() < 0.1)
-
+			decided = RandomService.random() < 0.1
+			iterate_node.interact(decided)
+			iterate_node.decided = decided
 
 
 

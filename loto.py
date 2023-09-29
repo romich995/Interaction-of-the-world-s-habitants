@@ -2,6 +2,95 @@ import random
 from fractions import Fraction
 from itertools import groupby
 
+
+class PartOfBalance(Fraction):
+	pass
+
+class Balance:
+	def __init__(self, balance: int):
+		self.balance = balance
+
+	def transfer_balance_to_by_part_of_balance_to(self, other, part_of_balance):
+		transfer_balance = self * part_of_balance
+		self.transfer_balance_by_transfer_balance_to(other, transfer_balance)
+
+	def transfer_balance_by_transfer_balance_to(self, other, transfer_balance):
+		self -= transfer_balance
+		other += transfer_balance
+
+	def annul(self):
+		self.balance = 0
+
+	def __copy__(self):
+		my_copy = type(self)(self.balance)
+		return my_copy
+
+	def __add__(self, other):
+		new_balance = type(self)(self.balance)
+		if isinstance(other, type(self)):
+			new_balance.balance += other.balance
+			return new_balance
+		elif isinstance(other, int):
+			new_balance.balance += other
+			return new_balance
+
+		raise NotImplemented()
+
+	def __radd__(self, other):
+		return self.__add___(other)
+
+	def __iadd__(self, other):
+		if isinstance(other, type(self)):
+			self.balance += other.balance
+
+		raise NotImplemented()
+
+	def __mul__(self, other):
+		new_balance = type(self)(self.balance)
+		if isinstance(other, type(self)):
+			new_balance.balance *= other.balance
+			return new_balance
+		elif isinstance(other, int):
+			new_balance.balance *= other
+			return new_balance
+		elif isinstance(other, PartOfBalance):
+			fraction_transfer_balance = self.balance * other 
+			new_balance.balance = int(fraction_transfer_balance)
+			new_balance += fraction_transfer_balance > new_balance
+			return new_balance
+
+		raise NotImplemented()
+
+	def __imul__(self, other):
+		if isinstance(other, type(self)):
+			self.balance *= other.balance
+
+		raise NotImplemented()
+
+	def __rmul__(self, other):
+		return self.__mul__(other)
+
+	def __sub__(self, other):
+		new_balance = type(self)(self.balance)
+		if isinstance(other, type(self)):
+			new_balance.balance -= other.balance
+			return new_balance
+		elif isinstance(other, int):
+			new_balance.balance -= other
+			return new_balance
+
+		raise NotImplemented()
+
+	def __isub__(self, ):
+		if isinstance(other, type(self)):
+			self.balance -= other.balance
+
+		raise NotImplemented()
+
+	def __rsub__(self, other):
+		return self.__sub__(other)
+
+
 class RandomService:
 	def __init__(self):
 		self.seed = None
@@ -41,28 +130,12 @@ class ActionDestination:
 		return hash(self.action_destination)
 
 
-class Disorder:
-	def __init__(self, object_destination_disorder):
-		self.object_destination_disorder = object_destination_disorder
-
-	def __call__(self, goal):
-		for cl in self.object_destination_disorder:
-			if cl is ActionObject:
-				yield 'action_object'
-
-			if cl is ActionDestination:
-				yield 'action_destination'
-
-			if cl is Action:
-				yield 'action'
-
-
-class GroupableGoal:
-	def __init__(self, group_cl, disorder):
-		self.group_cl = group_cl
-		self.disorder = disorders
-
-	def __call__(self):
+#class GroupableGoal:
+#	def __init__(self, group_cl, disorder):
+#		self.group_cl = group_cl
+#		self.disorder = disorders
+#
+#	def __call__(self):
 
 
 class Disorders:
@@ -204,8 +277,7 @@ class Node:
 		self.goal_list_attributes = goal_list_attributes
 		self.rank = rank
 		self.goal_lottery_probability = goal_lottery_probability
-		self.register = register
-		
+		self.register = register		
 
 	def __hash__(self):
 		return hash(self.goal_attribute)
@@ -229,84 +301,94 @@ class SeedRegisterPartBalance:
 		return self.seed_node_id == other.seed_node_id and self.register == other.register 
 
 	def __copy__(self):
-		my_copy = type(self)(self.seed_node_id, self.register, deepcopy(self.balance), deepcopy(self.part_of_balance))
+		my_copy = type(self)(self.seed_node_id, self.register, copy(self.balance), deepcopy(self.part_of_balance))
 		return my_copy
 
 
 class ListSeedRegisterPartBalances:
-	def __init__(self):
-		self.list_seed_register_part_balances = []
+	def __init__(self, seed_register_part_balances=None):
+		#self.list_seed_register_part_balances = []
 		self.dict_seed_register_part_balances = defaultdict(list)
 
+		if seed_register_part_balances is not None:
+			self.add(seed_register_part_balance)
+
 	def add(self, seed_register_part_balances):
-		self.list_seed_register_part_balances.append(seed_register_part_balances)
+		#self.list_seed_register_part_balances.append(seed_register_part_balances)
 		self.dict_seed_register_part_balances[seed_register_part_balances].append(seed_register_part_balances)
+	def delete(self, seed_register):
+		self.dict_seed_register_part_balances[seed_register].remove(seed_register)
 
 	def expand(self, other):
-		self.list_seed_register_part_balances.expand(other.list_seed_register_part_balances)
-		for seed_register_part_balances in other.list_seed_register_part_balances:
-			self.dict_seed_register_part_balances[seed_register_part_balances].append(seed_register_part_balances)
+		#self.list_seed_register_part_balances.expand(other.list_seed_register_part_balances)
+		
+		for key_seed_register_part_balances in other.dict_seed_register_part_balances.keys():
+				self.dict_seed_register_part_balances[key_seed_register_part_balances]\
+					.expand(other.dict_seed_register_part_balances[key_seed_register_part_balances])
 
-	def group(self):
-		for seed_register_part_balances in self.list_seed_register_part_balances:
-			self.register.balance += self.balance
-			self.balance = 0
+	#def group(self):
+	#	for list_seed_register_part_balances in self.dict_seed_register_part_balances:
+	#		for seed_register_part_balances in list_seed_register_part_balances:
+	#			seed_register_part_balances.balance.transfer_balance_by_transfer_balance_to(self.register.balance)
 
 	def __contains__(self, seed_register_part_balances):
 		return seed_register_part_balances in self.dict_seed_register_part_balances:
 
 	def __copy__(self):
         my_copy = type(self)()
-        for seed_register_part_balances in self.list_seed_register_part_balances:
-        	new_seed_register_part_balances = copy(seed_register_part_balances)
-        	my_copy.add(new_seed_register_part_balances)
+		for list_seed_register_part_balances in self.dict_seed_register_part_balances.values():
+			for seed_register_part_balances in list_seed_register_part_balances:
+	        	new_seed_register_part_balances = copy(seed_register_part_balances)
+	        	my_copy.add(new_seed_register_part_balances)
 
         return my_copy
 
     def update_balances(self, factor):
-    	for seed_register_part_balances in self.list_seed_register_part_balances:
-    		seed_register_part_balances.balances *= factor
+		for list_seed_register_part_balances in self.dict_seed_register_part_balances.values():
+			for seed_register_part_balances in list_seed_register_part_balances:
+    			seed_register_part_balances.balances *= factor
     		#seed_register_part_balances.part_of_balance *= factor
 
     @property
     def total_balance(self):
-    	total_balance = Fraction(0)
-    	for seed_register_part_balances in self.list_seed_register_part_balances:
-    		total_balance += seed_register_part_balances.balance
+    	total_balance = Balance(0)
+		for list_seed_register_part_balances in self.dict_seed_register_part_balances.values():
+			for seed_register_part_balances in list_seed_register_part_balances:
+    			total_balance += seed_register_part_balances.balance
     	return total_balance
 
     def annul(self):
-		for seed_register_part_balances in self.list_seed_register_part_balances:
-    		seed_register_part_balances.balance = Fraction(0)
+		for list_seed_register_part_balances in self.dict_seed_register_part_balances.values():
+			for seed_register_part_balances in list_seed_register_part_balances:
+    			seed_register_part_balances.balance.annul(0)
 
     def multiply(self, factor):
-    	for seed_register_part_balances in self.list_seed_register_part_balances:
-    		seed_register_part_balances.balance *= factor 
-
+		for list_seed_register_part_balances in self.dict_seed_register_part_balances:
+			for seed_register_part_balances in list_seed_register_part_balances:
+    			seed_register_part_balances.balance *= factor 
+    			seed_register_part_balances.part_of_balance *= factor
 
 
 class IterateNode:
-	def __init__(self, node, balance=0):
+	def __init__(self, node)
 		self.id = id(self)
 		self.node = node
-		self.balance = balance
+		self.balance = node.register.balance
 		self.rank = node.rank
 		self.goal_lottery_probability = node.goal_lottery_probability
 		self.goal_attribute = None
 		self.register = node.register
+		self.part_of_balance = PartOfBalance(1)
 		self.seed_register_part_balances = ListSeedRegisterPartBalances(
 												SeedRegisterPartBalance(
 													register,
 												 	balance,
-												 	part_of_balance
+												 	self.part_of_balance
 													)
 												) 
 		self.decision = None
-		#self._balance = balance 
-		self.loto_balance = 0
 		self.participating_in_goal_lottery = None
 		self.decided = False
-		self.part_of_balance = Factor(1)
 		self.paths = []
 
 	def __copy__(self):
@@ -324,7 +406,7 @@ class IterateNode:
 			other.goal_attribute = attributes_part_of_balance.attributes
 			other.part_of_balance *= attributes_part_of_balance.part_of_balance
 			other.balance *= other.part_of_balance
-			other.loto_balance *= other.part_of_balance
+			#other.loto_balance *= other.part_of_balance
 			other.seed_register_part_balances.multiply(other.part_of_balance)
 
 	def choice_goal_lottery(self):
@@ -334,9 +416,20 @@ class IterateNode:
 	def interact(self, decision):
 		self.decision = decision
 
+	def return_part_total_balance_to(self, register):
+		total_balance = self.seed_register_part_balances.total_balance
+		seed_register = self.seed_register_part_balances.get(register)
+		if total_balance > 0:
+			part_of_balance = PartOfBalance(seed_register.balance, total_balance)
+			
+		for seed_register_part_balance in self.seed_register_part_balances:
+			self.balance.transfer_balance_by_part_of_balance_to(register, part_of_balance)
+			seed_register.annul()
+
+
 	@property
 	def total_balance(self):
-		return self.balance + self.loto_balance
+		return self.balance
 	 
 	def __hash__(self):
 		return hash(self.goal_attribute)
@@ -353,21 +446,21 @@ class IterateNode:
 			next_iterate_node = self.paths[self.path.i + 1]
 			next_iterate_node.seed_register_part_balances.expand(self.seed_register_part_balances)
 			
-			next_iterate_node.balance += self.balance
-			self.balance = 0
-
-			next_iterate_node.loto_balance += self.loto_balance
-			self.loto_balance = 0
+			self.transfer_balance_to_iterate_node(next_iterate_node)					
+			#self.balance.transfer_balance_by_transfer_balance_to(next_iterate_node.balance, self.balance)
+			#self.loto_balance.transfer_balance_by_transfer_balance_to(next_iterate_node.loto_balance, self.loto_balance)
 
 			next_iterate_node.seed_expand(self)
 
-	def transfer_balance_from(self, other):
-		self.loto_balance += other.total_balance
-		other.balance = 0 
-		other.loto_balance = 0
-		#self.seed_expand(other)
-		other.decided = True 
-		
+	def transfer_balance_to_iterate_node(self, next_iterate_node):
+		self.balance.transfer_balance_by_transfer_balance_to(next_iterate_node.balance, self.balance)
+		#self.loto_balance.transfer_balance_by_transfer_balance_to(next_iterate_node.loto_balance, self.loto_balance)
+
+	#def transfer_balances_to_local_iterate_node(self, local_iterate_node):
+	#	self.total_balance.transfer_balance_by_transfer_balance_to(next_iterate_node.loto_balance, self.total_balance)
+	#	self.loto_balance = 0
+	#	self.balance = 0
+	#	#decided
 
 class IteratePath:
 	def __init__(self, collector_seed_register_part_balances):
@@ -398,9 +491,11 @@ class IteratePath:
 			self.max_rank = iterate_node.rank
 			self.decided = iterate_node.decided or self.decided 
 			self.n += 1
-			iterate_node.paths.append(self) 
+			iterate_node.paths.append(self)
 
-	def increase_rank_or_back_balance(self, ):
+		raise NotImplemented()
+
+	def increase_rank_or_back_balance(self):
 		if self.i < n:
 			self.i += 1
 			self.rank = self.path[i].rank
@@ -426,8 +521,9 @@ class IteratePath:
 		
 		if not next_iterate_node:
 			self.root.balance = self.root._balance
-			if self.iterate_node.loto_balance > 0:
-				fraction_balance = Fraction(self.iterate_node.balance * self.root.balance, self.iterate_node.loto_balance)
+			if self.iterate_node.balance > 0:
+				part_of_balance = PartOfBalance(self.root.balance, self.iterate_node.balance)
+				fraction_balance = self.iterate_node.balance * part_of_balance
 				loto_balance = int(fraction_balance)
 				loto_balance += fraction_balance > loto_balance
 			self.iterate_node.balance -= self.root.balance
@@ -469,9 +565,10 @@ class GoalLotteryIterate:
 
 		for goal, iterate_nodes in self.hash_map.items():
 			balances = (iterate_node.balance for iterate_node in iterate_nodes)
-			iterate_node = RandomService.choices(iterate_nodes, balances)
+			iterate_node = RandomService.choice(iterate_nodes, balances)
 			for source_iterate_node in iterate_nodes:
-				iterate_node.transfer_from(source_iterate_node)
+				if iterate_node != source_iterate_node:
+					source_iterate_node.transfer_balances_to_local_iterate_node(iterate_node)
 
 		self.not_decided_nodes_after_loto.append(iterate_node)
 
@@ -497,7 +594,7 @@ class IterateRankPaths:
 			yield iterate_path
 
 class IteratePaths:
-	def __init__(self, rank=0):
+	def __init__(self, rank=0, collector_seed_register_part_balances):
 		self.paths = defaultdict(IterateRankPaths)
 		self.rank = rank
 		self.max_rank = rank
@@ -568,6 +665,14 @@ class Register:
 		my_copy.balance = copy(self.balance)
 		return my_copy
 
+	def allocate_funds(self, balance):
+		seed_register = type(self)(balance)
+		if balance <= self.balance:
+			self.balance -= seed_register.balance
+			return seed_register
+		raise NotImplemented()
+
+
 class RegisterDecisions:
 	def __init__(self, register):
 		self.register = register
@@ -589,14 +694,6 @@ class RegisterDecisions:
 			iterate_node.decided = decided
 
 
-
-class InteractionRegisters:
-	def __init__(self)
-		self.
-
-	def 
-
-
 class PreInterAction(object):
 	def __init__(self, iterate_node):
 		super(PreInterAction, self).__init__()
@@ -605,5 +702,216 @@ class PreInterAction(object):
 
 
 if __name__ == '__main__':
-
+	action = Action('подорвать')
+	action_2 = Action('обнаружить')
+	action_3 = Action('уничтожить')
+	action_object = ActionObject('деятельность')
+	action_destination = ActionDestination('радиоаудиоуправленцы')
+	participation = Action('учавствовать')
+	money = ActionObject('деньгами')
+	loto = ActionDestination('лоторея')
+	distribute = Action('распределить')
+	on = ActionDestination('на')
+	build = Action('проложить')
+	road = ActionObject('дорогу')
+	Nizhniy_Tyhtem = ActionDestination('Нижний Тыхтем') 
+	decrease = Action('потеснить')
+	dark_side = ActionDestination('блю теам')
+	fuck = Action('ебать')
+	fight = Action('отпиздить')
+	glass_bottle = Action('стеклянная бутылка')
+	brain = Action('мозги')
+	light_side = Action('Light Side')
+	DestinationRomanBiktayrov = ActionDestination(Roman_Biktayrov) 
 	
+
+	Roman_Biktayrov = Register('Roman Biktayrov', Balance(100))
+	dark_side = Register('Dark Side', Balance(3_000_000_000))
+
+	collector_seed_register_part_balances = ListSeedRegisterPartBalances()\
+		.add(Roman_Biktayrov)\
+		.add(dark_side)
+
+
+
+	list_attribute_probability = \
+		ListAttributesProbability([
+			AttributesProbabilityPartOfBalance(frozenset(Action, ActionObject, ActionDestination), 
+				Fraction(9, 10),  1),
+			AttributesProbabilityPartOfBalance(frozenset(Action, ActionDestination), 
+				Fraction(8, 10), 4),
+			AttributesProbabilityPartOfBalance(frozenset(Action, ActionObject), 
+				Fraction(5, 10), 43),
+			AttributesProbabilityPartOfBalance(frozenset(Action), 
+				Fraction(1, 10), 34),
+			AttributesProbabilityPartOfBalance(frozenset(), 
+				Fraction(1, 100), 23444),
+			AttributesProbabilityPartOfBalance(frozenset(ActionObject, ActionDestination), 
+				Fraction(1, 100), 435),
+			AttributesProbabilityPartOfBalance(frozenset(ActionObject), 
+				Fraction(1, 10), 15),
+			AttributesProbabilityPartOfBalance(frozenset(ActionDestination), 
+				Fraction(8, 100), 56)
+				])
+
+	list_participation = ListAttributesProbability([
+		AttributesProbabilityPartOfBalance(
+			frozenset(Action, ActionObject, ActionDestination), \
+		 	Fraction(1, 1), \
+		 	1)
+	])
+
+	list_ditribution_attributes = 
+		ListAttributesProbability([
+			AttributesProbabilityPartOfBalance(frozenset(Action, ActionObject, ActionDestination), 
+				Fraction(1, 1), 1),
+			AttributesProbabilityPartOfBalance(frozenset(Action, ActionDestination), 
+				Fraction(1, 1), 4),
+			AttributesProbabilityPartOfBalance(frozenset(Action, ActionObject), 
+				Fraction(1, 1), 43),
+			AttributesProbabilityPartOfBalance(frozenset(Action), 
+				Fraction(1, 34), 456)
+			AttributesProbabilityPartOfBalance(frozenset(), 
+				Fraction(1, 1), 23444),
+			AttributesProbabilityPartOfBalance(frozenset(ActionObject, ActionDestination), 
+				Fraction(1, 1), 435),
+			AttributesProbabilityPartOfBalance(frozenset(ActionObject), 
+				Fraction(1, 1), 15),
+			AttributesProbabilityPartOfBalance(frozenset(ActionDestination), 
+				Fraction(1, 1), 56)
+			])
+
+	fuck_brain_Roman_Biktayrov = ListAttributesProbability(\
+		[AttributesProbabilityPartOfBalance(frozenset(Action, ActionObject, ActionDestination), 
+			Fraction(1, 1), 100)]
+		)
+
+	goal = GoalListAttributes(action, action_object, \
+		action_destination, register, list_attributes_probability)
+
+	goal_2 = GoalListAttributes(action_2, action_object, \
+		action_destination, register, list_attributes_probability)
+
+	goal_3 = GoalListAttributes(action_3, action_object, \
+		action_destination, register, list_attributes_probability)
+
+	participation = GoalListAttributes(participation, money, loto, \
+		register, list_participation)
+
+	distribute = GoalListAttributes(loto_distribute, money, on, list_ditribution_attributes)
+
+	fuck_brain_to_Roman_Biktayrov = GoalListAttributes(
+		fuck, 
+		brain, 
+		DestinationRomanBiktayrov, 
+		fuck_brain_Roman_Biktayrov)
+
+	locate_radioaudiomanagers = Node(
+		'Обнаружить радиоаудиоуправленцев сидящих в кресле',
+		GoalListAttributes(
+		 	action,
+		 	action_object,
+		 	action_destination,
+		 	list_participation
+		 	),
+			0,
+			Fraction(3, 5),
+			Roman_Biktayrov.allocate_funds(Balance(1))
+		)
+
+	participate_in_loto = Node(
+		'Учавствовать в лоторее Ромашкино Лото',
+		GoalListAttributes(
+			participation,
+			money,
+			loto,
+			list_participation
+			),
+			0,
+			Fraction(1),
+			Roman_Biktayrov.allocate_funds(Balance(10))
+		)
+
+	war_with_radioaudiomanagers = Node(
+		'Пиздец Вам злодеи!!',
+		GoalListAttributes(
+		 	action_2,
+		 	action_object,
+		 	action_destination,
+		 	list_participation
+		 	),
+		1,
+		Fraction(8, 9),
+		Roman_Biktayrov.allocate_funds(Balance(79))
+		)
+
+	participate_in_loto_1 = Node(
+		'Учавствовать в лоторее Ромашкино Лото',
+		GoalListAttributes(
+			participation,
+			money,
+			loto,
+			list_participation
+			),
+			1,
+			Fraction(1),
+			Roman_Biktayrov.allocate_funds(Balance(10))
+		)
+
+	participate_in_loto_by_dark_side = Node(
+		'Учавствовать в лоторее Ромашкино Лото',
+		GoalListAttributes(
+			participation,
+			money,
+			loto,
+			list_participation
+			),
+			0,
+			Fraction(1),
+			dark_side.allocate_funds(Balance(1_000_000_000))
+		)
+
+	fight_with_light_side = Node(
+		'Отпиздить cтеклянной бутылкой лайт сайд',
+		GoalListAttributes(
+			fight,
+			glass_bottle,
+			light_side,
+			list_participation
+			),
+			1,
+			Fraction(1),
+			dark_side.allocate_funds(Balance(2_000_000_000))
+		)
+
+	# нулевая нода может быть только в одном пути в плане корня пути
+
+	iterate_paths = IteratePaths()
+
+	path_1 = IteratePath(collector_seed_register_part_balances)\
+		.create_root(locate_radioaudiomanagers)\
+		.add(war_with_radioaudiomanagers)
+
+	iterate_paths.add(path_1) 
+
+	path_2 = IteratePath(collector_seed_register_part_balances)\
+		.create_root(participate_in_loto)
+		.add(war_with_radioaudiomanagers)
+
+	iterate_paths.add(path_2)
+
+	path_3 = IteratePath(collector_seed_register_part_balances)\
+		.create_root(participate_in_loto_1)\
+
+	iterate_paths.add(path_3)
+	
+	path_4 = IteratePath(collector_seed_register_part_balances)\
+		.create_root(participate_in_loto_by_dark_side)\
+		.add(fight_with_light_side)
+
+	iterate_paths.add(path_4)
+
+	next(iterate_paths)
+	print(collector_seed_register_part_balances.balance)
+	next(iterate_paths)
+	print(collector_seed_register_part_balances.balance)

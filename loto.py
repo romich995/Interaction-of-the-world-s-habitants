@@ -644,7 +644,9 @@ class IterateNode:
                 new_balance = other.balance * part_of_balance
                 new_part_of_balance = Fraction(new_balance.balance, 1) \
                 / Fraction(other.balance.balance, 1)
-                other._balance -= other.balance
+                self._balance -= new_balance
+                other.balance = new_balance
+                other._balance = Balance(new_balance.balance)
                 other.seed_register_part_balances.multiply(new_part_of_balance)
                 yield other
             else:
